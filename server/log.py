@@ -3,10 +3,14 @@ import colorlog
 import traceback
 
 class Log:
-    def __init__(self, log_file=None, log_level=logging.INFO):
+    def __init__(self, log_file=None, log_level=logging.INFO, disable=False):
+        if disable:
+            log_level = logging.CRITICAL + 1
+
         log_format = (
             "%(log_color)s[%(asctime)s] :: %(levelname)s :: %(name)s :: %(message)s%(reset)s"
         )
+
         colorlog.basicConfig(
             filename=log_file,
             level=log_level,

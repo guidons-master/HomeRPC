@@ -34,7 +34,7 @@ static void mdns_search() {
     static esp_ip4_addr_t addr = { 0 };
     if (addr.addr != 0) return;
     rpc_log.log_info(TAG, "MDNS Search");
-    esp_err_t err = rpc_mdns_search(BROKER_URL, &addr);
+    esp_err_t err = rpc_mdns_search(CONFIG_BROKER_URL, &addr);
     if (err == ESP_OK) {
         snprintf(SharedData.uri, sizeof(SharedData.uri), "ws://%d.%d.%d.%d:3000", IP2STR(&addr));
         xTaskCreatePinnedToCore(rpc_mqtt_task, "event_loop", 4096, (void *)&SharedData, 5, NULL, 0);
@@ -118,12 +118,12 @@ void rpc_addDevice(const Device_t *dev) {
 }
 
 // thread-safe
-static rpc_any_t rpc_callService(const Device_t *dev, const char *name, const rpc_any_t *params, unsigned int params_num) {
+static rpc_any_t rpc_callService(const Device_t *dev, const char *name, 
+    const rpc_any_t *params, unsigned int params_num, const TickType_t timeout_s) {
     rpc_log.log_info(TAG, "Call Service");
     rpc_mqtt_call(dev, name, params, params_num);
     rpc_any_t res;
-    TickType_t timeout = pdMS_TO_TICKS(CALL_TIMEOUT);
-    if (xQueueReceive(SharedData.response_queue, &res, timeout) == pdTRUE) {
+    if (xQueueReceive(SharedData.response_queue, &res, pdMS_TO_TICKS(timeout_s)) == pdTRUE) {
         rpc_log.log_info(TAG, "Service called");
         return res;
     }

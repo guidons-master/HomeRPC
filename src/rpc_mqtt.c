@@ -23,50 +23,50 @@ typedef struct {
     char uri[32];
 } SharedData_t;
 static SharedData_t* SharedData = NULL;
-char callback_topic[TOPIC_LEN_MAX];
+char callback_topic[CONFIG_TOPIC_LEN_MAX];
 static QueueHandle_t SearchQueue = NULL;
 
 static rpc_any_t exec(rpc_func_t func, unsigned char len, const rpc_any_t* params) {
     switch (len) {
         case 0:
             return func();
-#if PARAMS_MAX >= 1
+#if CONFIG_PARAMS_MAX >= 1
         case 1:
             return ((rpc_any_t (*)(rpc_any_t))func)(params[0]);
 #endif
-#if PARAMS_MAX >= 2
+#if CONFIG_PARAMS_MAX >= 2
         case 2:
             return ((rpc_any_t (*)(rpc_any_t, rpc_any_t))func)(params[0], params[1]);
 #endif
-#if PARAMS_MAX >= 3
+#if CONFIG_PARAMS_MAX >= 3
         case 3:
             return ((rpc_any_t (*)(rpc_any_t, rpc_any_t, rpc_any_t))func)(params[0], params[1], params[2]);
 #endif
-#if PARAMS_MAX >= 4
+#if CONFIG_PARAMS_MAX >= 4
         case 4:
             return ((rpc_any_t (*)(rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t))func)(params[0], params[1], params[2], params[3]);
 #endif
-#if PARAMS_MAX >= 5
+#if CONFIG_PARAMS_MAX >= 5
         case 5:
             return ((rpc_any_t (*)(rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t))func)(params[0], params[1], params[2], params[3], params[4]);
 #endif
-#if PARAMS_MAX >= 6
+#if CONFIG_PARAMS_MAX >= 6
         case 6:
             return ((rpc_any_t (*)(rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t))func)(params[0], params[1], params[2], params[3], params[4], params[5]);
 #endif
-#if PARAMS_MAX >= 7
+#if CONFIG_PARAMS_MAX >= 7
         case 7:
             return ((rpc_any_t (*)(rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t))func)(params[0], params[1], params[2], params[3], params[4], params[5], params[6]);
 #endif
-#if PARAMS_MAX >= 8
+#if CONFIG_PARAMS_MAX >= 8
         case 8:
             return ((rpc_any_t (*)(rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t))func)(params[0], params[1], params[2], params[3], params[4], params[5], params[6], params[7]);
 #endif
-#if PARAMS_MAX >= 9
+#if CONFIG_PARAMS_MAX >= 9
         case 9:
             return ((rpc_any_t (*)(rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t))func)(params[0], params[1], params[2], params[3], params[4], params[5], params[6], params[7], params[8]);
 #endif
-#if PARAMS_MAX >= 10
+#if CONFIG_PARAMS_MAX >= 10
         case 10:
             return ((rpc_any_t (*)(rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t, rpc_any_t))func)(params[0], params[1], params[2], params[3], params[4], params[5], params[6], params[7], params[8], params[9]);
 #endif
@@ -81,7 +81,7 @@ static rpc_any_t exec(rpc_func_t func, unsigned char len, const rpc_any_t* param
 void rpc_mqtt_call(const Device_t *dev, const char *service, const rpc_any_t *params, const unsigned int params_num) {
     rpc_log.log_info(TAG, "rpc_mqtt_call");
     char *json_str = serialize_service(callback_topic, params, params_num);
-    char topic[TOPIC_LEN_MAX];
+    char topic[CONFIG_TOPIC_LEN_MAX];
 
     snprintf(topic, sizeof(topic), "/%s/%s/%u/%s", dev->place, dev->type, dev->id, service);
     int msg_id = esp_mqtt_client_publish(client, topic, json_str, strlen(json_str), 0, false);
@@ -94,10 +94,9 @@ void rpc_mqtt_call(const Device_t *dev, const char *service, const rpc_any_t *pa
 }
 
 static void rpc_func_wrapper(void *arg) {
-    rpc_any_t args[PARAMS_MAX];
+    rpc_any_t args[CONFIG_PARAMS_MAX];
     Service_t *service = (Service_t *)arg;
     char* callback = NULL;
-    // rpc_any_t* params = NULL;
     unsigned int params_count = 0;
 
     while (1) {
@@ -109,30 +108,13 @@ static void rpc_func_wrapper(void *arg) {
             continue;
         }
 
-        // for (unsigned int i = 0; i < params_count; i++) {
-        //     rpc_log.log_info(TAG, "Param %d: %s", i, params[i].str);
-        //     switch (service->input_type[i]) {
-        //         case 'i':
-        //             args[i].l = atol(params[i].str);
-        //             break;
-        //         case 'f':
-        //             args[i].f = atof(params[i].str);
-        //             break;
-        //         case 'd':
-        //             args[i].d = atof(params[i].str);
-        //             break;
-        //         case 'c':
-        //             args[i].c = params[i].str[0];
-        //             break;
-        //         case 's':
-        //             args[i].str = params[i].str;
-        //             break;
-        //         default:
-        //             rpc_log.log_error(TAG, "Invalid parameter type: %c", service->input_type[i]);
-        //             continue;
-        //     }
         rpc_log.log_info(TAG, "Param %d", params_count);
-        rpc_any_t res = exec(service->func, strlen(service->input_type), args);
+        if (params_count != strlen(service->input_type)) {
+            rpc_log.log_error(TAG, "The number of parameters does not match");
+            continue;
+        }
+
+        rpc_any_t res = exec(service->func, params_count, args);
 
         cJSON* json = rpc_any_to_json(res);
         char* json_str = cJSON_Print(json);
@@ -166,7 +148,7 @@ static void publish_device_info(Device_t* device, esp_mqtt_client_handle_t clien
 
 static void rpc_mqtt_register(void *arg) {
     static Device_t *device;
-    static char topic[TOPIC_LEN_MAX];
+    static char topic[CONFIG_TOPIC_LEN_MAX];
     while (1) {
         xQueueReceive(SharedData->device_queue, &device, portMAX_DELAY);
         publish_device_info(device, client);
@@ -224,9 +206,22 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 rpc_log.log_error(TAG, "Failed to subscribe to topic: %s", callback_topic);
             if (result != pdPASS)
                 result = xTaskCreatePinnedToCore(rpc_mqtt_register, "mqtt_register", 4096, NULL, 5, NULL, 0);
-            else
-                for (DeviceList_t *device = SharedData->device_list; device != NULL; device = device->next)
-                    publish_device_info(device->device, client);
+            else {
+                char topic[CONFIG_TOPIC_LEN_MAX];
+                Device_t* device = NULL;
+                for (DeviceList_t *Device = SharedData->device_list; Device != NULL; Device = Device->next) {
+                    device = Device->device;
+                    publish_device_info(device, client);
+                    for (unsigned int i = 0; i < device->services_num; i++) {
+                        snprintf(topic, sizeof(topic), "/%s/%s/%u/%s", device->place, device->type, device->id, device->services[i].name);
+                        int sub_id = esp_mqtt_client_subscribe(client, topic, 0);
+                        if (sub_id == -1)
+                            rpc_log.log_error(TAG, "Failed to subscribe to topic: %s", topic);
+                        else
+                            rpc_log.log_info(TAG, "Subscribed to topic: %s", topic);
+                    }
+                }
+            }
             break;
 
         case MQTT_EVENT_DISCONNECTED:

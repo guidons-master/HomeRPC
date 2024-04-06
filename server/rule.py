@@ -8,8 +8,8 @@ from multiprocessing import Queue
 
 class Rule:
     def __init__(self, loop: asyncio.AbstractEventLoop = None, \
-                 recv: Queue = None, send: Queue = None, topic: Queue = None):
-        self.log = Log()
+                 recv: Queue = None, send: Queue = None, topic: Queue = None, log: Log = True):
+        self.log = Log(disable = not log)
         self.loop = loop or asyncio.get_event_loop()
         (self.recv, self.send) = (recv, send)
         self.topic = topic
@@ -39,11 +39,10 @@ class Rule:
             try:
                 data = packet.payload.data.decode('utf-8')
                 json_data = json.loads(data)
-                print(json_data)
+                self.log.log(json_data)
                 if (packet.variable_header.topic_name == "/topics/register"):
                     self.loop.run_in_executor(None, self.topic.put, json_data)
                 elif (packet.variable_header.topic_name == "/callback/master"):
-                    data = json_data['result']
                     self.loop.run_in_executor(None, self.recv.put, data)
             except Exception as e:
                 self.log.log_error(e)
@@ -52,7 +51,7 @@ class Rule:
         while True:
             data = await self.loop.run_in_executor(None, self.send.get)
             data = json.loads(data)
-            print(data)
+            self.log.log(data)
             await self._call(data['topic'], bytearray(data['message'], 'utf-8'))
     
     async def _call(self, topic, message):

@@ -6,7 +6,7 @@ extern "C" {
 
 #include "HomeRPC.h"
 
-extern char callback_topic[TOPIC_LEN_MAX];
+extern char callback_topic[CONFIG_TOPIC_LEN_MAX];
 void rpc_mqtt_call(const Device_t *, const char *, const rpc_any_t*, const unsigned int);
 void rpc_mqtt_task(void *);
 

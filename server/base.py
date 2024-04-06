@@ -3,30 +3,15 @@ from .broker import MqttBroker
 from .rule import Rule
 from inspect import signature
 from multiprocessing import Process, Queue
-from json import dumps
+from json import dumps, loads
 from struct import unpack, pack
 from typing import List
 import asyncio
 
-_func_registry = {}
-_rule_registry = {}
 _topic_registry = {}
-log = Log()
 _recv, _send = Queue(), Queue()
 _topic = Queue()
-
-def _wrapper(func: callable, interval_ms: int) -> asyncio.coroutine:
-    async def _():
-        while True:
-            try:
-                await func()
-                if interval_ms <= 0:
-                    break
-            except Exception as e:
-                log.log_error(e)
-
-            await asyncio.sleep(interval_ms / 1000)
-    return _()
+rpc_log = None
 
 def register_device(device: dict):
     place = device['place']
@@ -50,27 +35,22 @@ def update_registry():
             break
         else:
             register_device(topic)
-            print(_topic_registry)
+            rpc_log.log(f'Registered device: {_topic_registry}')
 
-def deserialize_rpc_any(buffer: List[str], data_type: str) -> List[any]:
-    res = []
+def deserialize_rpc_any(buffer: str, data_type: str) -> any:
+        res = bytes.fromhex(buffer.ljust(16, '0'))
 
-    for data, _type in zip(buffer, data_type):
-        data = bytes.fromhex(data.ljust(16, '0'))
-
-        if _type == 'f':
-            res.append(unpack('f', data[:4])[0])
-        elif _type == 'i':
-            res.append(unpack('q', data[:8])[0])
-        elif _type == 'd':
-            res.append(unpack('d', data[:8])[0])
-        elif _type == 'c':
-            ascii_value = unpack('B', data[:1])[0]
-            res.append(chr(ascii_value))
+        if data_type == 'f':
+            return unpack('f', res[:4])[0]
+        elif data_type == 'i':
+            return unpack('q', res[:8])[0]
+        elif data_type == 'd':
+            return unpack('d', res[:8])[0]
+        elif data_type == 'c':
+            ascii_value = unpack('B', res[:1])[0]
+            return chr(ascii_value)
         else:
-            raise ValueError('Unsupported data type: ' + _type)
-    
-    return res
+            raise ValueError('Unsupported data type: ' + data_type)
 
 def serialize_rpc_any(data_list: List[any], data_type: str) -> List[str]:
     res = []
@@ -89,56 +69,25 @@ def serialize_rpc_any(data_list: List[any], data_type: str) -> List[str]:
     
     return res
 
-def _asyncio_loop(port: int, log: bool, recv: Queue, send: Queue, topic: Queue):
+def _asyncio_loop(ip: str, log: bool, recv: Queue, send: Queue, topic: Queue):
+    loop = asyncio.get_event_loop()
+    rule_engine = Rule(loop, recv, send, topic, log)
+
     class Server(MqttBroker):
-        def __init__(self, port: int = 3000 , log: bool = True):
-            super().__init__(loop = loop, port = port, log = log)
+        def __init__(self, ip, log):
+            super().__init__(loop, ip, log)
 
         def _init_task(self):
             rule_engine.listen()
-            for rule in _rule_registry:
-                loop.create_task(_rule_registry[rule])
 
-    loop = asyncio.get_event_loop()
-    rule_engine = Rule(loop, recv, send, topic)
-    server = Server(port, log)
+    server = Server(ip, log)
     server.loop_forever()
 
 class HomeRPC():
     @staticmethod
-    def setup(port: int = 3000, log: bool = True):
-        Process(target = _asyncio_loop, args = (port, log, _recv, _send, _topic), daemon = True).start()
-
-    @staticmethod
-    def addFunc(allow_overwrite: bool = False):
-        def decorator(func):
-            if func.__name__ in _func_registry:
-                if allow_overwrite:
-                    log.log(f'Function `{func.__name__}` already exists! Overwriting...')
-                else:
-                    raise ValueError(
-                        f'Function `{func.__name__}` already exists! Use `allow_overwrite=True` to overwrite.'
-                    )
-            _func_registry[func.__name__] = {
-                'func': func,
-                'signature': signature(func)
-            }
-            return func
-        return decorator
-    
-    @staticmethod
-    def addRule(desc: str, interval_ms: int = 1000, allow_overwrite: bool = False):
-        def decorator(func):
-            if desc in _rule_registry:
-                if allow_overwrite:
-                    log.log(f'Rule `{desc}` already exists! Overwriting...')
-                else:
-                    raise ValueError(
-                        f'Rule `{desc}` already exists! Use `allow_overwrite=True` to overwrite.'
-                    )
-            _rule_registry[desc] = _wrapper(func, interval_ms)
-            return func
-        return decorator
+    def setup(ip: str = None, log: bool = True):
+        rpc_log = Log(disable = not log)
+        Process(target = _asyncio_loop, args = (ip, log, _recv, _send, _topic), daemon = True).start()
 
     @staticmethod
     def place(name: str):
@@ -152,7 +101,7 @@ class HomeRPC():
                         class Id:
                             def call(self, func: str, *args, **kwargs):
                                 update_registry()
-                                timeout = kwargs.get("timeout", 10)
+                                timeout = kwargs.get("timeout_s", 10) * 1000
                             
                                 if name in _topic_registry and device_name in _topic_registry[name]:
                                     for device_info in _topic_registry[name][device_name]:
@@ -162,23 +111,30 @@ class HomeRPC():
                                             for service in device_info['services']:
                                                 if service['name'] != func:
                                                     continue
+                                                
+                                                if len(args) != len(service['input_type']):
+                                                    rpc_log.log_error(f'Function {func} requires {len(service["input_type"])} arguments, but {len(args)} were given')
+                                                    return None
 
+                                                message = {
+                                                    "callback": "/callback/master",
+                                                }
+                                                if len(args):
+                                                    message["params"] = serialize_rpc_any(args, service['input_type'])
+                                                
                                                 _send.put(dumps({
                                                     "topic": f"/{name}/{device_name}/{device_id}/{func}",
-                                                    "message": dumps({
-                                                        "callback": "/callback/master",
-                                                        "params": serialize_rpc_any(args, service['input_type'])
-                                                    })
+                                                    "message": dumps(message)
                                                 }))
 
                                                 try:
-                                                    data = _recv.get(timeout = timeout)
-                                                    return deserialize_rpc_any(data['params'], service['output_type'])[0]
+                                                    data = loads(_recv.get(timeout = timeout))
+                                                    return deserialize_rpc_any(data['result'], service['output_type'])
                                                 except Exception as e:
-                                                    log.log_error(e)
+                                                    rpc_log.log_error(e)
                                                     return None
                             
-                                log.log_error(f'Device {name}/{device_name}/{device_id} does not exist')
+                                rpc_log.log_error(f'Device {name}/{device_name}/{device_id} does not exist')
                                 return None
                         return Id()
                 return Device()

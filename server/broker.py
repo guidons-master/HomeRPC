@@ -2,22 +2,21 @@ import asyncio
 from amqtt.broker import Broker
 from zeroconf import ServiceInfo, Zeroconf, IPVersion
 from .log import Log
-from socket import inet_aton, gethostbyname_ex, gethostname
+from socket import inet_aton
 
 class MqttBroker:
-    def __init__(self, loop: asyncio.AbstractEventLoop = None, port: int = 3000 , log: bool = True):
-        self.port = port
+    def __init__(self, loop: asyncio.AbstractEventLoop = None, ip: str = None , log: bool = True):
         self.zeroconf = Zeroconf(ip_version = IPVersion.All)
         self.info = ServiceInfo(
             "_mqtt._tcp.local.",
             "broker._mqtt._tcp.local.",
-            addresses = [inet_aton(ip) for ip in gethostbyname_ex(gethostname())[2]],
-            port = port,
+            addresses = [inet_aton(ip),],
+            port = 3000,
             properties = { "name": "MQTT Broker", "path": "/mqtt" },
             server = "homerpc.local.",
         )
 
-        if log: self.log = Log()
+        self.log = Log(disable = not log)
 
         self.loop = loop or asyncio.get_event_loop()
 
@@ -26,7 +25,7 @@ class MqttBroker:
             "listeners": {
                 "default": {
                     "type": "ws",
-                    "bind": "0.0.0.0:%d" % self.port,
+                    "bind": "0.0.0.0:%d" % self.info.port,
                     "max_connections": 0
                 }
             },

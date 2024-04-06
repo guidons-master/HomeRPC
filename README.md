@@ -17,11 +17,11 @@
 
 ## ⚙️ 实现原理
 
-![](./asset/works.png)
+![](./assets/works.png)
 
 ## 🛠️ 使用说明
 
-HomeRPC支持以下基本数据类型作为命令参数:
+`HomeRPC` 支持以下基本数据类型作为命令参数:
 
 | 类型                    | 签名 | 示例  |
 | ----------------------- | ---- | ----- |
@@ -50,14 +50,10 @@ typedef union {
 
 `ESP32` 客户端示例代码如下:
 ```c
+// file: main.c
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "driver/gpio.h"
 #include "HomeRPC.h"
-#include "esp_log.h"
-#include "esp_system.h"
-
-static const char *TAG = "example";
 
 #define BLINK_GPIO 2
 
@@ -91,13 +87,15 @@ void app_main(void) {
     Service_t services[] = {
         {
             .func = trigger_led,
-            .input_type = "ifid",
+            .input_type = "i",
+            .output_type = 'i',
             .name = "trigger",
             .desc = "open the light",
         },
         {
             .func = led_status,
-            .output_type = 'u',
+            .input_type = "",
+            .output_type = 'i',
             .name = "status",
             .desc = "check the light status",
         }
@@ -118,30 +116,45 @@ void app_main(void) {
         .type = "light",
         .id = 1
     };
-    // 参数列表
-    rpc_any_t args[] = {
-        {.uc = 1},
-    };
 
     while (1) {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        // 调用自身服务
-        rpc_any_t res = HomeRPC.callService(&led2, "trigger", args);
-        printf("res: %d\n", res.i);
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        // 调用服务
+        rpc_any_t status = HomeRPC.callService(&led2, "status", NULL, 10);
+        printf("led status: %d\n", status.i);
     }
 }
 ```
 
 `Broker` 服务端示例代码如下:
 ```Python
-from HomeRPC import HomeRPC
+# file: server.py
+from server import HomeRPC
 
 if __name__ == '__main__':
     # 启动HomeRPC
-    HomeRPC.setup(port = 3000, log = True)
+    HomeRPC.setup(ip = "192.168.43.9", log = True)
 
+    # 等待ESP32连接
+    input("Waiting for ESP32 to connect...")
+    
     place = HomeRPC.place("room")
     # 调用ESP32客户端服务
-    place.device("light").id(1).call("trigger", 1, timeout = 100)
-    print(place.device("light").id(1).call("status", timeout = 100))
+    place.device("light").id(1).call("trigger", 1, timeout_s = 10)
+    print("led status: ", place.device("light").id(1).call("status", timeout_s = 10))
 ```
+## 使用方法
+
+1. 将 `HomeRPC` 组件添加到您的 `ESP-IDF` 项目中:
+```bash
+cd ~/my_esp_idf_project
+mkdir components
+cd components
+git clone https://github.com/guidons-master/HomeRPC.git
+```
+2. 在 `menuconfig` 中配置 `HomeRPC`
+
+## 🧑‍💻 维护人员
+
+- [@guidons](https://github.com/guidons-master)
+- [@Hexin Lv](https://github.com/Mondaylv)

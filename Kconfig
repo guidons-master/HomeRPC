@@ -1,0 +1,33 @@
+menu "HomeRPC configuration"
+
+    config ROUTER_SSID
+        string "Router SSID"
+            default "ROUTER_SSID"
+            help
+                Router SSID.
+    
+    config ROUTER_PASSWORD
+        string "Router password"
+            default "ROUTER_PASSWORD"
+            help
+                Router password.
+
+    config BROKER_URL
+        string "Broker URL"
+            default "homerpc"
+            help
+                Broker URL.
+    
+    config PARAMS_MAX
+        int "Params max"
+            default 10
+            help
+                Params max.
+    
+    config TOPIC_LEN_MAX
+        int "Topic len max"
+            default 128
+            help
+                Topic len max.
+            
+endmenu

@@ -4,15 +4,6 @@
 extern "C" {
 #endif
 
-#define ROUTER_SSID     "xxxxxxxxx"
-#define ROUTER_PASSWORD "xxxxxxxxx"
-
-#define BROKER_URL      "homerpc"
-
-#define PARAMS_MAX      10
-#define TOPIC_LEN_MAX   128
-#define CALL_TIMEOUT    60000
-
 #include "esp_system.h"
 #include "esp_log.h"
 #include "cJSON.h"
@@ -70,10 +61,10 @@ typedef struct {
     uint8_t log_enable;
     void (*start)(void);
     void (*addDevice)(const Device_t *);
-    rpc_any_t (*_callService)(const Device_t *, const char *, const rpc_any_t *, unsigned int);
+    rpc_any_t (*_callService)(const Device_t *, const char *, const rpc_any_t *, unsigned int, TickType_t);
 } HomeRPC_t;
 
-#define callService(device, service, params) _callService((device), (service), (params), (sizeof((params)) / sizeof(rpc_any_t)))
+#define callService(device, service, params, timeout_s) _callService((device), (service), (params), ((params) && (sizeof((params)) / sizeof(rpc_any_t))), (timeout_s) * 1000)
 
 extern HomeRPC_t HomeRPC;
 

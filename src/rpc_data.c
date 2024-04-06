@@ -2,7 +2,6 @@
 #include "HomeRPC.h"
 #include "rpc_data.h"
 #include <string.h>
-#include "rpc_log.h"
 #include <stdlib.h>
 
 char* serialize_device(const Device_t* device) {
@@ -42,6 +41,11 @@ static char* serializeRpcAny(const rpc_any_t* data) {
 char* serialize_service(const char* callback, const rpc_any_t* params, unsigned int params_num) {
     cJSON* json = cJSON_CreateObject();
     cJSON_AddStringToObject(json, "callback", callback);
+    if (params_num == 0) {
+        char* json_string = cJSON_Print(json);
+        cJSON_Delete(json);
+        return json_string;
+    }
     cJSON* params_array = cJSON_CreateArray();
     char *param = NULL;
     for (unsigned int i = 0; i < params_num; i++) {
@@ -76,23 +80,20 @@ int deserialize_service(cJSON *json, char** callback, rpc_any_t *params, unsigne
     if (callback_json == NULL) {
         return -1;
     }
-    rpc_log.log_info("deserialize_service", "callback: %s", callback_json->valuestring);
     *callback = strdup(callback_json->valuestring);
 
     cJSON* params_array = cJSON_GetObjectItem(json, "params");
     if (params_array == NULL) {
-        free(*callback);
-        return -1;
+        *params_num = 0;
+        return 0;
     }
-    rpc_log.log_info("deserialize_service", "params: %s", cJSON_Print(params_array));
 
     *params_num = cJSON_GetArraySize(params_array);
-    if (*params_num > PARAMS_MAX) {
+    if (*params_num > CONFIG_PARAMS_MAX) {
         free(*callback);
         return -1;
     }
 
-    rpc_log.log_info("deserialize_service", "params_num: %d", *params_num);
     for (unsigned int i = 0; i < *params_num; i++) {
         cJSON* param_json = cJSON_GetArrayItem(params_array, i);
         if (param_json == NULL) {
@@ -100,7 +101,6 @@ int deserialize_service(cJSON *json, char** callback, rpc_any_t *params, unsigne
             return -1;
         }
         params[i] = deserializeRpcAny(param_json->valuestring);
-        rpc_log.log_info("deserialize_service", "params[%d]", i);
     }
 
     return 0;

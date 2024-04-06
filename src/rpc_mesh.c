@@ -35,8 +35,8 @@ static void wifi_init(void) {
     // Station
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = ROUTER_SSID,
-            .password = ROUTER_PASSWORD,
+            .ssid = CONFIG_ROUTER_SSID,
+            .password = CONFIG_ROUTER_PASSWORD,
         },
     };
     rpc_log.log_info(TAG, "Setting WiFi Station Config");
