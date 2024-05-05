@@ -17,7 +17,7 @@
 
 ## 🎨 效果展示
 
-<video controls src="https://raw.githubusercontent.com/guidons-master/HomeRPC/main/assets/chat_with_llm.mp4" title="chat with llm" autoplay loop></video>
+https://github.com/guidons-master/HomeRPC/assets/41904603/89fafaa5-8a3b-4159-9780-6227521c16d5
 
 ```bash
 streamlit run homeagent.py
