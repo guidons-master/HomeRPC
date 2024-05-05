@@ -1,9 +1,8 @@
 from .log import Log
 import asyncio
 import json
-import struct
 from amqtt.client import MQTTClient
-from amqtt.mqtt.constants import QOS_1, QOS_2
+from amqtt.mqtt.constants import QOS_1
 from multiprocessing import Queue
 
 class Rule:

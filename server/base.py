@@ -1,7 +1,6 @@
 from .log import Log
 from .broker import MqttBroker
 from .rule import Rule
-from inspect import signature
 from multiprocessing import Process, Queue
 from json import dumps, loads
 from struct import unpack, pack
@@ -11,7 +10,55 @@ import asyncio
 _topic_registry = {}
 _recv, _send = Queue(), Queue()
 _topic = Queue()
-rpc_log = None
+_rpc_log = None
+
+def dict2funcs() -> List[dict]:
+    global _topic_registry
+    data = _topic_registry
+
+    functions = []
+
+    type_signature_mapping = {
+        'c': {'type': 'string', 'description': 'a character'},
+        'i': {'type': 'integer', 'description': 'a number'},
+        'f': {'type': 'number', 'description': 'a single-precision floating-point number'},
+        'd': {'type': 'number', 'description': 'a double-precision floating-point number'},
+    }
+
+    for place, devices in data.items():
+        for device_type, device_list in devices.items():
+            for device in device_list:
+                for service in device['services']:
+                    function = {
+                        'name': service['name'],
+                        'description': service['desc'],
+                        'parameters': {
+                            'type': 'object',
+                            'properties': {
+                                'place': {
+                                    'type': 'string',
+                                    'description': 'where the device is located',
+                                    'enum': [place]
+                                },
+                                'device_type': {
+                                    'type': 'string',
+                                    'description': 'what type of device',
+                                    'enum': [device_type]
+                                },
+                                'device_id': {
+                                    'type': 'integer',
+                                    'description': 'the id of the device',
+                                    'enum': [device['id']]
+                                }
+                            },
+                            'required': ['place', 'device_type', 'device_id']
+                        }
+                    }
+                    if service['input_type']:
+                        function['parameters']['properties']['input_type'] = type_signature_mapping[service['input_type']]
+                        function['parameters']['required'].append('input_type')
+                    functions.append(function)
+    return functions
 
 def register_device(device: dict):
     place = device['place']
@@ -35,7 +82,7 @@ def update_registry():
             break
         else:
             register_device(topic)
-            rpc_log.log(f'Registered device: {_topic_registry}')
+            _rpc_log.log(f'Registered device: {_topic_registry}')
 
 def deserialize_rpc_any(buffer: str, data_type: str) -> any:
         res = bytes.fromhex(buffer.ljust(16, '0'))
@@ -86,7 +133,8 @@ def _asyncio_loop(ip: str, log: bool, recv: Queue, send: Queue, topic: Queue):
 class HomeRPC():
     @staticmethod
     def setup(ip: str = None, log: bool = True):
-        rpc_log = Log(disable = not log)
+        global _rpc_log
+        _rpc_log = Log(disable = not log)
         Process(target = _asyncio_loop, args = (ip, log, _recv, _send, _topic), daemon = True).start()
 
     @staticmethod
@@ -113,7 +161,7 @@ class HomeRPC():
                                                     continue
                                                 
                                                 if len(args) != len(service['input_type']):
-                                                    rpc_log.log_error(f'Function {func} requires {len(service["input_type"])} arguments, but {len(args)} were given')
+                                                    _rpc_log.log_error(f'Function {func} requires {len(service["input_type"])} arguments, but {len(args)} were given')
                                                     return None
 
                                                 message = {
@@ -131,11 +179,16 @@ class HomeRPC():
                                                     data = loads(_recv.get(timeout = timeout))
                                                     return deserialize_rpc_any(data['result'], service['output_type'])
                                                 except Exception as e:
-                                                    rpc_log.log_error(e)
+                                                    _rpc_log.log_error(e)
                                                     return None
                             
-                                rpc_log.log_error(f'Device {name}/{device_name}/{device_id} does not exist')
+                                _rpc_log.log_error(f'Device {name}/{device_name}/{device_id} does not exist')
                                 return None
                         return Id()
                 return Device()
         return Place()
+
+    @staticmethod
+    def funcs():
+        update_registry()
+        return dict2funcs()
