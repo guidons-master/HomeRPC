@@ -44,7 +44,7 @@ void app_main(void) {
             .input_type = "",
             .output_type = 'i',
             .name = "status",
-            .desc = "check the light status",
+            .desc = "check the light status, return 1 if on, 0 if off",
         }
     };
     // 设备信息
@@ -67,7 +67,7 @@ void app_main(void) {
     while (1) {
         vTaskDelay(5000 / portTICK_PERIOD_MS);
         // 调用服务
-        rpc_any_t status = HomeRPC.callService(&led2, "status", NULL, 10);
-        printf("led status: %d\n", status.i);
+        // rpc_any_t status = HomeRPC.callService(&led2, "status", NULL, 10);
+        // printf("led status: %d\n", status.i);
     }
 }

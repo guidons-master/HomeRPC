@@ -17,7 +17,7 @@
 
 ## 🎨 效果展示
 
-![](./assets/chat_with_llm.mp4)
+<video controls src="https://raw.githubusercontent.com/guidons-master/HomeRPC/main/assets/chat_with_llm.mp4" title="chat with llm" autoplay loop></video>
 
 ```bash
 streamlit run homeagent.py
@@ -105,7 +105,7 @@ void app_main(void) {
             .input_type = "",
             .output_type = 'i',
             .name = "status",
-            .desc = "check the light status",
+            .desc = "check the light status, return 1 if on, 0 if off",
         }
     };
     // 设备信息
@@ -128,8 +128,8 @@ void app_main(void) {
     while (1) {
         vTaskDelay(5000 / portTICK_PERIOD_MS);
         // 调用服务
-        rpc_any_t status = HomeRPC.callService(&led2, "status", NULL, 10);
-        printf("led status: %d\n", status.i);
+        // rpc_any_t status = HomeRPC.callService(&led2, "status", NULL, 10);
+        // printf("led status: %d\n", status.i);
     }
 }
 ```
